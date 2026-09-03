@@ -1,0 +1,24 @@
+[project]
+name = "aurabot"
+version = "0.1.0"
+description = "Discord AI Bot with LangChain and Ollama"
+readme = "README.md"
+authors = [
+    { name = "Niik4466", email = "niikk4466@gmail.com" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "discord-py>=2.3.2",
+    "langchain>=0.3.0",
+    "langchain-mcp-adapters>=0.3.2",
+    "langchain-ollama>=1.1.0",
+    "langchain-openai>=0.2.0",
+    "mcp>=1.0.0",
+]
+
+[project.scripts]
+aurabot = "aurabot.bot:main"
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"

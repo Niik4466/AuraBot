@@ -1,0 +1,25 @@
+{
+  "provider": "ollama",
+  "discord": {
+    "token": "YOUR_DISCORD_BOT_TOKEN_HERE"
+  },
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "gemma4:26b",
+    "temperature": 0.7
+  },
+  "OpenRouter": {
+    "api_key": "YOUR_OPENROUTER_API_KEY",
+    "model": "deepseek/deepseek-chat",
+    "temperature": 0.7
+  },
+  "storage": {
+    "prompts_file": "data/personal_prompts.json"
+  },
+  "mcp_servers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
+  }
+}

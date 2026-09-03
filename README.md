@@ -1,31 +1,108 @@
-# Discord Bot with Ollama Integration
+# AuraBot - Discord Bot Backend con LangChain & Ollama
 
-This bot integrates Discord with a local Ollama instance, allowing for AI chat with customizable personalities.
+Backend de AuraBot para Discord, orquestado con **LangChain** y modelos locales servidos mediante **Ollama**. Diseñado con una arquitectura desacoplada y preparado para despliegue local o contenerizado con Docker.
 
-## Setup
+## Requisitos
 
-1.  **Install Dependencies**:
-    ```bash
-    pip install -r requirements.txt
-    ```
+- Python 3.10
+- [uv](https://github.com/astral-sh/uv) para gestión de dependencias y empaquetado
+- Ollama en ejecución local o remota
+- Token de bot de Discord (con **Message Content Intent** activado en el Discord Developer Portal)
 
-2.  **Configure Environment**:
-    - Edit `.env` and add your `DISCORD_BOT_TOKEN`.
-    - Ensure `OLLAMA_URL` points to your running Ollama instance (default: `http://localhost:11434/api/chat`).
-    - **Important**: Go to the [Discord Developer Portal](https://discord.com/developers/applications), select your application, go to the "Bot" tab, and enable **Message Content Intent**. This is required for the bot to read messages.
+## Estructura del Proyecto
 
-3.  **Run the Bot**:
-    ```bash
-    python bot.py
-    ```
+```text
+AuraBot/
+├── config.json              # Configuración principal (Discord, Ollama, Storage)
+├── config.example.json      # Plantilla de ejemplo para configuración
+├── data/
+│   └── personal_prompts.json# Almacenamiento persistente de prompts de usuario
+├── Dockerfile               # Imagen Docker en base a Python 3.10 y uv
+├── docker-compose.yml       # Orquestación del backend contenerizado
+├── .dockerignore
+├── .python-version          # Especificación de versión (3.10)
+├── pyproject.toml           # Dependencias y metadatos del proyecto uv
+└── src/
+    └── aurabot/
+        ├── __init__.py      # Exportación de módulos y punto de entrada
+        ├── bot.py           # Backend del bot Discord (eventos, comandos, cogs)
+        ├── config.py        # Clase Config para carga y validación de config.json
+        ├── llm.py           # Clase LLM: prompts, comportamiento y orquestación
+        ├── mcp.py           # Conexión y gestión de servidores MCP (stdio/SSE)
+        ├── storage.py       # Almacenamiento asíncrono de personal prompts
+        └── tooling.py       # Motor Zero-Shot Tooling (tool binding y ReAct loop)
+```
 
-## Features
+## Configuración (`config.json`)
 
--   **Chat with AI**: Mention `@BotName` or reply to its messages to chat.
--   **Personalities**: Use `/personal_prompt set <prompt>` to give the bot a specific personality for you.
--   **Context Aware**: The bot reads the last 30 messages in the channel to understand the conversation context.
+Edita el archivo `config.json` en la raíz del proyecto:
 
-## Commands
+```json
+{
+  "provider": "ollama",
+  "discord": {
+    "token": "TU_DISCORD_BOT_TOKEN"
+  },
+  "ollama": {
+    "base_url": "http://localhost:11434",
+    "model": "gemma4:26b",
+    "temperature": 0.7
+  },
+  "OpenRouter": {
+    "api_key": "sk-or-v1-xxxxxxxxxxxx",
+    "model": "deepseek/deepseek-chat",
+    "temperature": 0.7
+  },
+  "storage": {
+    "prompts_file": "data/personal_prompts.json"
+  }
+}
+```
 
--   `/personal_prompt set <prompt>`: Set your personal prompt.
--   `/personal_prompt view`: View your current personal prompt.
+### Opciones de Proveedor (`provider`)
+- `"ollama"`: Utiliza un modelo local servido por **Ollama** mediante `ChatOllama` de LangChain.
+- `"openrouter"`: Utiliza la API de **OpenRouter** mediante `ChatOpenAI` de LangChain.
+
+> **Nota para Docker**: Si usas Ollama en tu máquina host (fuera del contenedor Docker), puedes configurar `"base_url": "http://host.docker.internal:11434"`.
+
+
+
+
+## Ejecución Local con `uv`
+
+1. **Instalar dependencias y sincronizar entorno virtual**:
+   ```bash
+   uv sync
+   ```
+
+2. **Iniciar el bot**:
+   ```bash
+   uv run aurabot
+   ```
+   o directamente:
+   ```bash
+   uv run python -m aurabot.bot
+   ```
+
+## Ejecución con Docker / Docker Compose
+
+1. **Construir y levantar el contenedor**:
+   ```bash
+   docker compose up --build -d
+   ```
+
+2. **Ver logs en tiempo real**:
+   ```bash
+   docker compose logs -f
+   ```
+
+3. **Detener el contenedor**:
+   ```bash
+   docker compose down
+   ```
+
+## Comandos del Bot (Slash Commands)
+
+- `/personal_prompt set <prompt>`: Configura un prompt de personalidad personalizado para tu usuario.
+- `/personal_prompt view`: Consulta tu prompt personalizado actual.
+- `/personal_prompt clear`: Restablece la personalidad a los valores predeterminados.

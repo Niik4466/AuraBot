@@ -1,18 +1,25 @@
 import json
-import os
 import asyncio
 import logging
+from pathlib import Path
+from aurabot.config import config
 
 logger = logging.getLogger("DiscordBot")
 
+
 class PromptStorage:
-    def __init__(self, filename="personal_prompts.json"):
-        self.filename = filename
+    """
+    Asynchronous JSON storage for personal user prompts.
+    """
+
+    def __init__(self, filepath: str | Path | None = None):
+        self.filepath = Path(filepath) if filepath else config.prompts_file_path
         self._ensure_file()
 
     def _ensure_file(self):
-        if not os.path.exists(self.filename):
-            with open(self.filename, "w", encoding="utf-8") as f:
+        self.filepath.parent.mkdir(parents=True, exist_ok=True)
+        if not self.filepath.exists():
+            with open(self.filepath, "w", encoding="utf-8") as f:
                 json.dump({}, f)
 
     async def get_personal_prompt(self, user_id: int) -> str | None:
@@ -20,7 +27,7 @@ class PromptStorage:
 
     def _read_prompt(self, user_id_str: str) -> str | None:
         try:
-            with open(self.filename, "r", encoding="utf-8") as f:
+            with open(self.filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
             return data.get(user_id_str)
         except Exception as e:
@@ -32,12 +39,12 @@ class PromptStorage:
 
     def _write_prompt(self, user_id_str: str, prompt: str) -> None:
         try:
-            with open(self.filename, "r", encoding="utf-8") as f:
+            with open(self.filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            
+
             data[user_id_str] = prompt
-            
-            with open(self.filename, "w", encoding="utf-8") as f:
+
+            with open(self.filepath, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.error(f"Error writing to prompt storage: {e}")
@@ -51,12 +58,12 @@ class PromptStorage:
 
     def _delete_prompt(self, user_id_str: str) -> bool:
         try:
-            with open(self.filename, "r", encoding="utf-8") as f:
+            with open(self.filepath, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            
+
             if user_id_str in data:
                 del data[user_id_str]
-                with open(self.filename, "w", encoding="utf-8") as f:
+                with open(self.filepath, "w", encoding="utf-8") as f:
                     json.dump(data, f, indent=2)
                 return True
             return False
