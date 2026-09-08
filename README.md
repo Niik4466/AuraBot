@@ -1,47 +1,80 @@
-# AuraBot - Discord Bot Backend con LangChain & Ollama
+# AuraBot - Discord Bot Backend with LangChain & Ollama
 
-Backend de AuraBot para Discord, orquestado con **LangChain** y modelos locales servidos mediante **Ollama**. Diseñado con una arquitectura desacoplada y preparado para despliegue local o contenerizado con Docker.
+AuraBot backend for Discord, orchestrated with **LangChain** and local models served through **Ollama**. Built with a decoupled architecture, an Agent Skills system, and MCP tool integration. Ready for local or containerized deployment with Docker.
 
-## Requisitos
+## Requirements
 
-- Python 3.10
-- [uv](https://github.com/astral-sh/uv) para gestión de dependencias y empaquetado
-- Ollama en ejecución local o remota
-- Token de bot de Discord (con **Message Content Intent** activado en el Discord Developer Portal)
+- Python 3.10+
+- [uv](https://github.com/astral-sh/uv) for dependency management and packaging
+- Ollama running locally or remotely
+- A Discord bot token (with **Message Content Intent** enabled in the Discord Developer Portal)
 
-## Estructura del Proyecto
+## Project Structure
 
 ```text
 AuraBot/
-├── config.json              # Configuración principal (Discord, Ollama, Storage)
-├── config.example.json      # Plantilla de ejemplo para configuración
-├── data/
-│   └── personal_prompts.json# Almacenamiento persistente de prompts de usuario
-├── Dockerfile               # Imagen Docker en base a Python 3.10 y uv
-├── docker-compose.yml       # Orquestación del backend contenerizado
+├── main.py                     # Standalone entry point
+├── config.json                 # Main configuration (Discord, LLM provider, Storage, MCP)
+├── config.example.json         # Example configuration template
+├── skills/                     # Agent Skills library (Agent Skills standard)
+│   └── <skill-name>/
+│       └── SKILL.md            # Skill definition (YAML frontmatter + instructions)
+├── data/                       # Runtime state (gitignored)
+│   ├── personal_prompts.json   # Persistent per-user personality prompts
+│   ├── active_skills.json      # Per-user active skills
+│   └── current_context.json    # Tooling conversation context
+├── Dockerfile                  # Docker image based on Python and uv
+├── docker-compose.yml          # Containerized backend orchestration
 ├── .dockerignore
-├── .python-version          # Especificación de versión (3.10)
-├── pyproject.toml           # Dependencias y metadatos del proyecto uv
+├── .python-version             # Python version pin
+├── pyproject.toml              # uv project dependencies and metadata
 └── src/
     └── aurabot/
-        ├── __init__.py      # Exportación de módulos y punto de entrada
-        ├── bot.py           # Backend del bot Discord (eventos, comandos, cogs)
-        ├── config.py        # Clase Config para carga y validación de config.json
-        ├── llm.py           # Clase LLM: prompts, comportamiento y orquestación
-        ├── mcp.py           # Conexión y gestión de servidores MCP (stdio/SSE)
-        ├── storage.py       # Almacenamiento asíncrono de personal prompts
-        └── tooling.py       # Motor Zero-Shot Tooling (tool binding y ReAct loop)
+        ├── __init__.py         # Package exports and entry point
+        ├── bot/                # Discord bot layer
+        │   ├── app.py          # AuraBot client, cogs setup and command sync
+        │   ├── events.py       # Event handlers (messages, LLM orchestration)
+        │   ├── messages.py     # Message helpers
+        │   └── cogs/           # Slash command cogs
+        │       ├── personality_prompt.py  # /personal_prompt
+        │       ├── skills_cog.py          # /skills
+        │       └── tooling_cog.py         # /fetch_tools
+        ├── config/             # Configuration loading and validation
+        │   ├── loader.py
+        │   ├── models.py       # Config dataclasses (Discord, Ollama, Storage, MCP)
+        │   └── timeutils.py
+        ├── llm/                # Language model layer
+        │   ├── engine.py       # LLM orchestration (prompts, behavior, history)
+        │   ├── factory.py      # Chat model factory (Ollama / OpenRouter)
+        │   ├── history.py      # Conversation history management
+        │   └── prompts.py      # System prompts
+        ├── mcp/                # MCP server connection and tool management
+        │   └── manager.py
+        ├── mcp_servers/
+        │   └── discord_info/   # Built-in MCP server for Discord introspection
+        ├── skills/             # Agent Skills system
+        │   ├── manager.py      # Skill discovery and lifecycle
+        │   ├── parser.py       # SKILL.md frontmatter parsing
+        │   ├── models.py
+        │   └── tool.py         # load_skill tool exposed to the LLM
+        ├── storage/            # Async JSON persistence
+        │   ├── prompt_storage.py
+        │   └── skills_storage.py
+        └── tooling/            # Zero-Shot Tooling engine
+            ├── engine.py       # Tool binding and ReAct loop
+            ├── context.py
+            └── metatools.py
 ```
 
-## Configuración (`config.json`)
+## Configuration (`config.json`)
 
-Edita el archivo `config.json` en la raíz del proyecto:
+Edit the `config.json` file at the project root (see `config.example.json`):
 
 ```json
 {
   "provider": "ollama",
   "discord": {
-    "token": "TU_DISCORD_BOT_TOKEN"
+    "token": "YOUR_DISCORD_BOT_TOKEN"
   },
   "ollama": {
     "base_url": "http://localhost:11434",
@@ -54,55 +87,88 @@ Edita el archivo `config.json` en la raíz del proyecto:
     "temperature": 0.7
   },
   "storage": {
-    "prompts_file": "data/personal_prompts.json"
+    "prompts_file": "data/personal_prompts.json",
+    "active_skills_file": "data/active_skills.json",
+    "skills_dir": "skills"
+  },
+  "mcp_servers": {
+    "fetch": {
+      "command": "uvx",
+      "args": ["mcp-server-fetch"]
+    }
   }
 }
 ```
 
-### Opciones de Proveedor (`provider`)
-- `"ollama"`: Utiliza un modelo local servido por **Ollama** mediante `ChatOllama` de LangChain.
-- `"openrouter"`: Utiliza la API de **OpenRouter** mediante `ChatOpenAI` de LangChain.
+### Provider Options (`provider`)
+- `"ollama"`: Uses a local model served by **Ollama** through LangChain's `ChatOllama`.
+- `"openrouter"`: Uses the **OpenRouter** API through LangChain's `ChatOpenAI`.
 
-> **Nota para Docker**: Si usas Ollama en tu máquina host (fuera del contenedor Docker), puedes configurar `"base_url": "http://host.docker.internal:11434"`.
+> **Docker note**: If you run Ollama on your host machine (outside the Docker container), you can set `"base_url": "http://host.docker.internal:11434"`.
 
+## Agent Skills
 
+AuraBot supports an Agent Skills system compatible with the [Agent Skills](https://agentskills.io) standard. Each skill lives in its own folder under `skills/` and is defined by a `SKILL.md` file with YAML frontmatter:
 
+```markdown
+---
+name: my-skill
+description: What the skill does and when the model should apply it.
+---
 
-## Ejecución Local con `uv`
+# My Skill
 
-1. **Instalar dependencias y sincronizar entorno virtual**:
+Instructions the model will follow when the skill is active.
+```
+
+Users activate skills per-user with `/skills load <name>`; the bot can also discover and load skills autonomously through the `load_skill` tool, which is always available to the LLM.
+
+## Running Locally with `uv`
+
+1. **Install dependencies and sync the virtual environment**:
    ```bash
    uv sync
    ```
 
-2. **Iniciar el bot**:
+2. **Start the bot**:
    ```bash
    uv run aurabot
    ```
-   o directamente:
+   or directly:
    ```bash
-   uv run python -m aurabot.bot
+   uv run python main.py
    ```
 
-## Ejecución con Docker / Docker Compose
+## Running with Docker / Docker Compose
 
-1. **Construir y levantar el contenedor**:
+1. **Build and start the container**:
    ```bash
    docker compose up --build -d
    ```
 
-2. **Ver logs en tiempo real**:
+2. **Follow logs in real time**:
    ```bash
    docker compose logs -f
    ```
 
-3. **Detener el contenedor**:
+3. **Stop the container**:
    ```bash
    docker compose down
    ```
 
-## Comandos del Bot (Slash Commands)
+## Bot Commands (Slash Commands)
 
-- `/personal_prompt set <prompt>`: Configura un prompt de personalidad personalizado para tu usuario.
-- `/personal_prompt view`: Consulta tu prompt personalizado actual.
-- `/personal_prompt clear`: Restablece la personalidad a los valores predeterminados.
+### `/personal_prompt`
+- `/personal_prompt set <prompt>`: Set a custom personality prompt for your user.
+- `/personal_prompt view`: View your current custom prompt.
+- `/personal_prompt clear`: Reset your personality to the defaults.
+
+### `/skills`
+- `/skills list`: List all available skills.
+- `/skills load <name>`: Activate a skill for your user.
+- `/skills unload <name>`: Deactivate an active skill.
+- `/skills view <name>`: Show a skill's full definition.
+- `/skills reload`: Re-scan the `skills/` directory.
+
+### `/fetch_tools`
+- Refreshes the MCP tool catalog used by the Zero-Shot Tooling engine.
