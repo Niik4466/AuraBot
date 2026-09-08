@@ -1,7 +1,8 @@
-import json
 import asyncio
+import json
 import logging
 from pathlib import Path
+
 from aurabot.config import config
 
 logger = logging.getLogger("DiscordBot")
@@ -70,3 +71,7 @@ class PromptStorage:
         except Exception as e:
             logger.error(f"Error clearing prompt from storage: {e}")
             return False
+
+
+# Singleton storage instance
+prompt_storage = PromptStorage()

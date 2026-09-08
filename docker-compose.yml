@@ -8,7 +8,9 @@ services:
     volumes:
       - ./config.json:/app/config.json:ro
       - ./data:/app/data
+      - ./skills:/app/skills:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
       - PYTHONUNBUFFERED=1
+      - TZ=America/Santiago

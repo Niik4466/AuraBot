@@ -1,5 +1,6 @@
 import logging
-from typing import Any, Sequence
+from typing import Any
+
 from langchain_core.tools import BaseTool
 from langchain_mcp_adapters.client import MultiServerMCPClient
 
@@ -21,6 +22,7 @@ class MCPManager:
         self.client: MultiServerMCPClient | None = None
         self._custom_tools: list[BaseTool] = []
         self._cached_tools: list[BaseTool] | None = None
+        self._cached_by_server: dict[str, list[BaseTool]] | None = None
         self._initialized: bool = False
 
     def register_tool(self, tool: BaseTool) -> None:
@@ -29,6 +31,7 @@ class MCPManager:
         """
         self._custom_tools.append(tool)
         self._cached_tools = None
+        self._cached_by_server = None
         logger.info("Registered custom tool: %s", tool.name)
 
     def _normalize_connections(self) -> dict[str, dict[str, Any]]:
@@ -113,11 +116,42 @@ class MCPManager:
         self._cached_tools = all_tools
         return all_tools
 
+    async def get_tools_by_server(
+        self, force_refresh: bool = False
+    ) -> dict[str, list[BaseTool]]:
+        """
+        Groups tools by MCP server (plus '_custom' for locally registered
+        tools). Used for progressive disclosure: activate_tools can enable a
+        whole server's tools at once.
+        """
+        if self._cached_by_server is not None and not force_refresh:
+            return self._cached_by_server
+
+        grouped: dict[str, list[BaseTool]] = {}
+        for tool in self._custom_tools:
+            grouped.setdefault("_custom", []).append(tool)
+
+        if not self._initialized:
+            await self.initialize()
+
+        if self.client:
+            for server_name in self.client.connections:
+                try:
+                    grouped[server_name] = await self.client.get_tools(server_name=server_name)
+                except Exception as e:
+                    logger.error(
+                        "Error retrieving tools from server '%s': %s", server_name, e, exc_info=True
+                    )
+
+        self._cached_by_server = grouped
+        return grouped
+
     async def close(self) -> None:
         """
         Closes active sessions if any.
         """
         self._cached_tools = None
+        self._cached_by_server = None
         self._initialized = False
 
 
